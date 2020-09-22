@@ -4,18 +4,22 @@ import torch
 import numpy as np
 import SimpleITK as sitk
 from ....data.subject import Subject
-from ....utils import nib_to_sitk
+from ....utils import nib_to_sitk, to_tuple
 from ....torchio import (
     INTENSITY,
     DATA,
     AFFINE,
     TYPE,
     TypeRangeFloat,
+    TypeSextetFloat,
     TypeTripletFloat,
 )
 from ... import SpatialTransform
 from .. import Interpolation, get_sitk_interpolator
 from .. import RandomTransform
+
+
+TypeOneToSixFloat = Union[TypeRangeFloat, TypeTripletFloat, TypeSextetFloat]
 
 
 class RandomAffine(RandomTransform, SpatialTransform):
@@ -78,9 +82,9 @@ class RandomAffine(RandomTransform, SpatialTransform):
     """
     def __init__(
             self,
-            scales: TypeRangeFloat = (0.9, 1.1),
-            degrees: TypeRangeFloat = 10,
-            translation: TypeRangeFloat = 0,
+            scales: TypeOneToSixFloat = (0.9, 1.1),
+            degrees: TypeOneToSixFloat = 10,
+            translation: TypeOneToSixFloat = 0,
             isotropic: bool = False,
             center: str = 'image',
             default_pad_value: Union[str, float] = 'otsu',
@@ -90,9 +94,9 @@ class RandomAffine(RandomTransform, SpatialTransform):
             keys: Optional[List[str]] = None,
             ):
         super().__init__(p=p, seed=seed, keys=keys)
-        self.scales = self.parse_range(scales, 'scales', min_constraint=0)
-        self.degrees = self.parse_degrees(degrees)
-        self.translation = self.parse_range(translation, 'translation')
+        self.scales = self.parse_params(scales, 1, 'scales', min_constraint=0)
+        self.degrees = self.parse_params(degrees, 0, 'degrees')
+        self.translation = self.parse_params(translation, 0, 'translation')
         self.isotropic = isotropic
         if center not in ('image', 'origin'):
             message = (
@@ -105,6 +109,27 @@ class RandomAffine(RandomTransform, SpatialTransform):
         self.interpolation = self.parse_interpolation(image_interpolation)
 
     @staticmethod
+    def to_range(n, around):
+        if around is None:
+            return 0, n
+        else:
+            return around - n, around + n
+
+    def parse_params(self, params, around, name, **kwargs):
+        params = to_tuple(params)
+        length = len(params)
+        if len(params) == 1 or len(params) == 2:  # d or (a, b)
+            params *= 3  # (d, d, d) or (a, b, a, b, a, b)
+        if len(params) == 3:  # (a, b, c)
+            items = [self.to_range(n, around) for n in params]
+            # (-a, a, -b, b, -c, c) or (1-a, 1+a, 1-b, 1+b, 1-c, 1+c)
+            params = [n for prange in items for n in prange]
+        assert len(params) == 6
+        for param_range in zip(params[::2], params[1::2]):
+            self.parse_range(param_range, name, **kwargs)
+        return params
+
+    @staticmethod
     def parse_default_value(value: Union[str, float]) -> Union[str, float]:
         if isinstance(value, Number) or value in ('minimum', 'otsu', 'mean'):
             return value
@@ -114,19 +139,13 @@ class RandomAffine(RandomTransform, SpatialTransform):
         )
         raise ValueError(message)
 
-    @staticmethod
-    def get_params(
-            scales: Tuple[float, float],
-            degrees: Tuple[float, float],
-            translation: Tuple[float, float],
-            isotropic: bool,
-            ) -> Tuple[np.ndarray, np.ndarray]:
-        scaling_params = torch.FloatTensor(3).uniform_(*scales)
-        if isotropic:
+    def get_params(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        scaling_params = self.sample_uniform_sextet(self.scales)
+        if self.isotropic:
             scaling_params.fill_(scaling_params[0])
-        rotation_params = torch.FloatTensor(3).uniform_(*degrees).numpy()
-        translation_params = torch.FloatTensor(3).uniform_(*translation).numpy()
-        return scaling_params.numpy(), rotation_params, translation_params
+        rotation_params = self.sample_uniform_sextet(self.degrees)
+        translation_params = self.sample_uniform_sextet(self.translation)
+        return scaling_params, rotation_params, translation_params
 
     @staticmethod
     def get_scaling_transform(
@@ -158,13 +177,7 @@ class RandomAffine(RandomTransform, SpatialTransform):
 
     def apply_transform(self, sample: Subject) -> dict:
         sample.check_consistent_spatial_shape()
-        params = self.get_params(
-            self.scales,
-            self.degrees,
-            self.translation,
-            self.isotropic,
-        )
-        scaling_params, rotation_params, translation_params = params
+        scaling_params, rotation_params, translation_params = self.get_params()
         for image in self.get_images(sample):
             if image[TYPE] != INTENSITY:
                 interpolation = Interpolation.NEAREST

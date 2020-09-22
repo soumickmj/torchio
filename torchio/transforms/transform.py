@@ -135,6 +135,7 @@ class Transform(ABC):
             min_constraint: TypeNumber = None,
             max_constraint: TypeNumber = None,
             type_constraint: type = None,
+            auto_range_type: str = 'zero',
             ) -> Tuple[TypeNumber, TypeNumber]:
         r"""Adapted from ``torchvision.transforms.RandomRotation``.
 
@@ -151,6 +152,8 @@ class Transform(ABC):
                 default is None, i.e. there is no maximal value.
             type_constraint: Precise type that :math:`n_{max}` and
                 :math:`n_{min}` must take.
+            around: Can be ``'zero'``, ``'one'`` or ``None``. If ``None``, it
+                will be from ``0`` to the input.
 
         Returns:
             A tuple of two numbers :math:`(n_{min}, n_{max})`.
@@ -167,7 +170,7 @@ class Transform(ABC):
                 :math:`n_{max}` and :math:`n_{max}` are not of type
                 :attr:`type_constraint`.
         """
-        if isinstance(nums_range, numbers.Number):
+        if isinstance(nums_range, numbers.Number):  # single number given
             if nums_range < 0:
                 raise ValueError(
                     f'If {name} is a single number,'
@@ -192,40 +195,40 @@ class Transform(ABC):
             return (min_range, nums_range)
 
         try:
-            min_degree, max_degree = nums_range
+            min_value, max_value = nums_range
         except (TypeError, ValueError):
             raise ValueError(
                 f'If {name} is not a single number, it must be'
                 f' a sequence of len 2, not {nums_range}'
             )
 
-        min_is_number = isinstance(min_degree, numbers.Number)
-        max_is_number = isinstance(max_degree, numbers.Number)
+        min_is_number = isinstance(min_value, numbers.Number)
+        max_is_number = isinstance(max_value, numbers.Number)
         if not min_is_number or not max_is_number:
             message = (
                 f'{name} values must be numbers, not {nums_range}')
             raise ValueError(message)
 
-        if min_degree > max_degree:
+        if min_value > max_value:
             raise ValueError(
                 f'If {name} is a sequence, the second value must be'
                 f' equal or greater than the first, but it is {nums_range}')
 
-        if min_constraint is not None and min_degree < min_constraint:
+        if min_constraint is not None and min_value < min_constraint:
             raise ValueError(
                 f'If {name} is a sequence, the first value must be greater'
-                f' than {min_constraint}, but it is {min_degree}'
+                f' than {min_constraint}, but it is {min_value}'
             )
 
-        if max_constraint is not None and max_degree > max_constraint:
+        if max_constraint is not None and max_value > max_constraint:
             raise ValueError(
                 f'If {name} is a sequence, the second value must be smaller'
-                f' than {max_constraint}, but it is {max_degree}'
+                f' than {max_constraint}, but it is {max_value}'
             )
 
         if type_constraint is not None:
-            min_type_ok = isinstance(min_degree, type_constraint)
-            max_type_ok = isinstance(max_degree, type_constraint)
+            min_type_ok = isinstance(min_value, type_constraint)
+            max_type_ok = isinstance(max_value, type_constraint)
             if not min_type_ok or not max_type_ok:
                 raise ValueError(
                     f'If "{name}" is a sequence, its values must be of'
