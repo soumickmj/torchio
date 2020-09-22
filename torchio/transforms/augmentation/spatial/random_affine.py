@@ -26,26 +26,40 @@ class RandomAffine(RandomTransform, SpatialTransform):
     r"""Random affine transformation.
 
     Args:
-        scales: Tuple :math:`(a, b)` defining the scaling
-            magnitude. The scaling values along each dimension are
-            :math:`(s_1, s_2, s_3)`, where :math:`s_i \sim \mathcal{U}(a, b)`.
+        scales: Tuple :math:`(a_1, b_1, a_2, b_2, a_3, b_3)` defining the
+            scaling ranges.
+            The scaling values along each dimension are :math:`(s_1, s_2, s_3)`,
+            where :math:`s_i \sim \mathcal{U}(a_i, b_i)`.
             For example, using ``scales=(0.5, 0.5)`` will zoom out the image,
             making the objects inside look twice as small while preserving
-            the physical size and position of the image.
-            If only one value :math:`d` is provided,
-            :math:`s_i \sim \mathcal{U}(0, d)`.
-        degrees: Tuple :math:`(a, b)` defining the rotation range in degrees.
-            The rotation angles around each axis are
+            the physical size and position of the image bounds.
+            If only one value :math:`x` is provided,
+            then :math:`s_i \sim \mathcal{U}(1 - x, 1 + x)`.
+            If two values :math:`(a, b)` are provided,
+            then :math:`s_i \sim \mathcal{U}(a, b)`.
+            If three values :math:`(x_1, x_2, x_3)` are provided,
+            then :math:`s_i \sim \mathcal{U}(1 - x_i, 1 + x_i)`.
+        degrees: Tuple :math:`(a_1, b_1, a_2, b_2, a_3, b_3)` defining the
+            rotation ranges in degrees.
+            Rotation angles around each axis are
             :math:`(\theta_1, \theta_2, \theta_3)`,
-            where :math:`\theta_i \sim \mathcal{U}(a, b)`.
-            If only one value :math:`d` is provided,
-            :math:`\theta_i \sim \mathcal{U}(-d, d)`.
-        translation: Tuple :math:`(a, b)` defining the translation in mm.
-            Translation along each axis is
-            :math:`(x_1, x_2, x_3)`,
-            where :math:`x_i \sim \mathcal{U}(a, b)`.
-            If only one value :math:`d` is provided,
-            :math:`x_i \sim \mathcal{U}(-d, d)`.
+            where :math:`\theta_i \sim \mathcal{U}(a_i, b_i)`.
+            If only one value :math:`x` is provided,
+            then :math:`\theta_i \sim \mathcal{U}(-x, x)`.
+            If two values :math:`(a, b)` are provided,
+            then :math:`\theta_i \sim \mathcal{U}(a, b)`.
+            If three values :math:`(x_1, x_2, x_3)` are provided,
+            then :math:`\theta_i \sim \mathcal{U}(-x_i, x_i)`.
+        translation: Tuple :math:`(a_1, b_1, a_2, b_2, a_3, b_3)` defining the
+            translation ranges in mm.
+            Translation along each axis is :math:`(t_1, t_2, t_3)`,
+            where :math:`t_i \sim \mathcal{U}(a_i, b_i)`.
+            If only one value :math:`x` is provided,
+            then :math:`t_i \sim \mathcal{U}(-x, x)`.
+            If two values :math:`(a, b)` are provided,
+            then :math:`t_i \sim \mathcal{U}(a, b)`.
+            If three values :math:`(x_1, x_2, x_3)` are provided,
+            then :math:`t_i \sim \mathcal{U}(-x_i, x_i)`.
         isotropic: If ``True``, the scaling factor along all dimensions is the
             same, i.e. :math:`s_1 = s_2 = s_3`.
         center: If ``'image'``, rotations and scaling will be performed around
@@ -82,7 +96,7 @@ class RandomAffine(RandomTransform, SpatialTransform):
     """
     def __init__(
             self,
-            scales: TypeOneToSixFloat = (0.9, 1.1),
+            scales: TypeOneToSixFloat = 0.1,
             degrees: TypeOneToSixFloat = 10,
             translation: TypeOneToSixFloat = 0,
             isotropic: bool = False,
@@ -94,10 +108,10 @@ class RandomAffine(RandomTransform, SpatialTransform):
             keys: Optional[List[str]] = None,
             ):
         super().__init__(p=p, seed=seed, keys=keys)
+        self.isotropic = isotropic
         self.scales = self.parse_params(scales, 1, 'scales', min_constraint=0)
         self.degrees = self.parse_params(degrees, 0, 'degrees')
         self.translation = self.parse_params(translation, 0, 'translation')
-        self.isotropic = isotropic
         if center not in ('image', 'origin'):
             message = (
                 'Center argument must be "image" or "origin",'
@@ -118,6 +132,12 @@ class RandomAffine(RandomTransform, SpatialTransform):
     def parse_params(self, params, around, name, **kwargs):
         params = to_tuple(params)
         length = len(params)
+        if name == 'scales' and self.isotropic and length in (3, 6):
+            message = (
+                f'If "isotropic" is True, the value for "{name}" must have'
+                f' length 1 or 2, but "{params}" was passed'
+            )
+            raise ValueError(message)
         if len(params) == 1 or len(params) == 2:  # d or (a, b)
             params *= 3  # (d, d, d) or (a, b, a, b, a, b)
         if len(params) == 3:  # (a, b, c)

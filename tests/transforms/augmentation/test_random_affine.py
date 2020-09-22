@@ -119,3 +119,7 @@ class TestRandomAffine(TorchioTestCase):
     def test_wrong_image_interpolation_value(self):
         with self.assertRaises(AttributeError):
             RandomAffine(image_interpolation='wrong')
+
+    def test_incompatible_args_isotropic(self):
+        with self.assertRaises(ValueError):
+            RandomAffine((0.8, 1.2, 0.1), isotropic=True)
