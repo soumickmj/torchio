@@ -136,6 +136,18 @@
       "contributions": [
         "code"
       ]
+<<<<<<< HEAD
+=======
+    },
+    {
+      "login": "neuronflow",
+      "name": "neuronflow",
+      "avatar_url": "https://avatars1.githubusercontent.com/u/7048826?v=4",
+      "profile": "https://github.com/neuronflow",
+      "contributions": [
+        "doc"
+      ]
+>>>>>>> 3f98bcf00e4d004418f21f0cdb5282bee77fada3
     }
   ],
   "contributorsPerLine": 7,
