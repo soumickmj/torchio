@@ -9,8 +9,13 @@ class TestAggregator(TorchioTestCase):
 
     def aggregate(self, mode, fixture):
         tensor = torch.ones(1, 1, 4, 4)
+<<<<<<< HEAD
         IMG = 'img'
         subject = tio.Subject({IMG: tio.ScalarImage(tensor=tensor)})
+=======
+        image_name = 'img'
+        subject = tio.Subject({image_name: tio.ScalarImage(tensor=tensor)})
+>>>>>>> 3f98bcf00e4d004418f21f0cdb5282bee77fada3
         patch_size = 1, 3, 3
         patch_overlap = 0, 2, 2
         sampler = tio.data.GridSampler(subject, patch_size, patch_overlap)
@@ -23,10 +28,17 @@ class TestAggregator(TorchioTestCase):
             (1, 1): 6,
         }
         for batch in loader:
+<<<<<<< HEAD
             for location, data in zip(batch[LOCATION], batch[IMG][DATA]):
                 coords_2d = tuple(location[1:3].tolist())
                 data *= values_dict[coords_2d]
             aggregator.add_batch(batch[IMG][DATA], batch[LOCATION])
+=======
+            for location, data in zip(batch[LOCATION], batch[image_name][DATA]):
+                coords_2d = tuple(location[1:3].tolist())
+                data *= values_dict[coords_2d]
+            aggregator.add_batch(batch[image_name][DATA], batch[LOCATION])
+>>>>>>> 3f98bcf00e4d004418f21f0cdb5282bee77fada3
         output = aggregator.get_output_tensor()
         self.assertTensorEqual(output, fixture)
 
