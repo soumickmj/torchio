@@ -1,4 +1,3 @@
-import numpy as np
 from torchio.transforms import RandomDownsample
 from ...utils import TorchioTestCase
 
@@ -11,8 +10,8 @@ class TestRandomDownsample(TorchioTestCase):
             axes=1,
             downsampling=(2., 2.)
         )
-        transformed = transform(self.sample)
-        self.assertEqual(self.sample.spacing[1] * 2, transformed.spacing[1])
+        transformed = transform(self.sample_subject)
+        self.assertEqual(self.sample_subject.spacing[1] * 2, transformed.spacing[1])
 
     def test_out_of_range_axis(self):
         with self.assertRaises(ValueError):

@@ -7,7 +7,7 @@ class TestRandomAffine(TorchioTestCase):
     def setUp(self):
         # Set image origin far from center
         super().setUp()
-        affine = self.sample.t1.affine
+        affine = self.sample_subject.t1.affine
         affine[:3, 3] = 1e5
 
     def test_rotation_image(self):
@@ -17,7 +17,7 @@ class TestRandomAffine(TorchioTestCase):
             default_pad_value=0,
             center='image',
         )
-        transformed = transform(self.sample)
+        transformed = transform(self.sample_subject)
         total = transformed.t1.data.sum()
         self.assertNotEqual(total, 0)
 
@@ -28,7 +28,7 @@ class TestRandomAffine(TorchioTestCase):
             default_pad_value=0,
             center='origin',
         )
-        transformed = transform(self.sample)
+        transformed = transform(self.sample_subject)
         total = transformed.t1.data.sum()
         self.assertEqual(total, 0)
 
@@ -39,8 +39,8 @@ class TestRandomAffine(TorchioTestCase):
             default_pad_value=0,
             center='image',
         )
-        transformed = transform(self.sample)
-        self.assertTensorAlmostEqual(self.sample.t1.data, transformed.t1.data)
+        transformed = transform(self.sample_subject)
+        self.assertTensorAlmostEqual(self.sample_subject.t1.data, transformed.t1.data)
 
         transform = RandomAffine(
             scales=(1, 1),
@@ -48,9 +48,9 @@ class TestRandomAffine(TorchioTestCase):
             default_pad_value=0,
             center='image',
         )
-        transformed = transform(self.sample)
+        transformed = transform(self.sample_subject)
         transformed = transform(transformed)
-        self.assertTensorAlmostEqual(self.sample.t1.data, transformed.t1.data)
+        self.assertTensorAlmostEqual(self.sample_subject.t1.data, transformed.t1.data)
 
     def test_translation(self):
         transform = RandomAffine(
@@ -58,17 +58,17 @@ class TestRandomAffine(TorchioTestCase):
             degrees=0,
             translation=(5, 5)
         )
-        transformed = transform(self.sample)
+        transformed = transform(self.sample_subject)
 
         # I think the right test should be the following one:
         # self.assertTensorAlmostEqual(
-        #     self.sample.t1.data[:, :-5, :-5, :-5],
+        #     self.sample_subject.t1.data[:, :-5, :-5, :-5],
         #     transformed.t1.data[:, 5:, 5:, 5:]
         # )
 
         # However the passing test is this one:
         self.assertTensorAlmostEqual(
-            self.sample.t1.data[:, :-5, :-5, 5:],
+            self.sample_subject.t1.data[:, :-5, :-5, 5:],
             transformed.t1.data[:, 5:, 5:, :-5]
         )
 
@@ -76,21 +76,17 @@ class TestRandomAffine(TorchioTestCase):
         with self.assertRaises(ValueError):
             RandomAffine(scales=-1.)
 
+    def test_scale_too_large(self):
+        with self.assertRaises(ValueError):
+            RandomAffine(scales=1.5)
+
     def test_scales_range_with_negative_min(self):
         with self.assertRaises(ValueError):
             RandomAffine(scales=(-1., 4.))
 
-    def test_too_many_scales_values(self):
-        with self.assertRaises(ValueError):
-            RandomAffine(scales=(1., 4., 12.))
-
     def test_wrong_scales_type(self):
         with self.assertRaises(ValueError):
             RandomAffine(scales='wrong')
-
-    def test_too_many_degrees_values(self):
-        with self.assertRaises(ValueError):
-            RandomAffine(degrees=(-10., 4., 42.))
 
     def test_wrong_degrees_type(self):
         with self.assertRaises(ValueError):
@@ -119,3 +115,31 @@ class TestRandomAffine(TorchioTestCase):
     def test_wrong_image_interpolation_value(self):
         with self.assertRaises(AttributeError):
             RandomAffine(image_interpolation='wrong')
+
+    def test_incompatible_args_isotropic(self):
+        with self.assertRaises(ValueError):
+            RandomAffine(scales=(0.8, 0.5, 0.1), isotropic=True)
+
+    def test_parse_scales(self):
+        def do_assert(transform):
+            self.assertEqual(transform.scales, 3 * (0.9, 1.1))
+        do_assert(RandomAffine(scales=0.1))
+        do_assert(RandomAffine(scales=(0.9, 1.1)))
+        do_assert(RandomAffine(scales=3 * (0.1,)))
+        do_assert(RandomAffine(scales=3 * [0.9, 1.1]))
+
+    def test_parse_degrees(self):
+        def do_assert(transform):
+            self.assertEqual(transform.degrees, 3 * (-10, 10))
+        do_assert(RandomAffine(degrees=10))
+        do_assert(RandomAffine(degrees=(-10, 10)))
+        do_assert(RandomAffine(degrees=3 * (10,)))
+        do_assert(RandomAffine(degrees=3 * [-10, 10]))
+
+    def test_parse_translation(self):
+        def do_assert(transform):
+            self.assertEqual(transform.translation, 3 * (-10, 10))
+        do_assert(RandomAffine(translation=10))
+        do_assert(RandomAffine(translation=(-10, 10)))
+        do_assert(RandomAffine(translation=3 * (10,)))
+        do_assert(RandomAffine(translation=3 * [-10, 10]))

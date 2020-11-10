@@ -23,13 +23,13 @@ class RandomDownsample(RandomTransform, SpatialTransform):
         keys: See :py:class:`~torchio.transforms.Transform`.
 
     Example:
-        >>> from torchio import RandomDownsample
-        >>> from torchio.datasets import Colin27
-        >>> transform = RandomDownsample(axes=1, downsampling=2.)   # Multiply spacing of second axis by 2
-        >>> transform = RandomDownsample(
-        ...     axes=(0, 1, 2), downsampling=(2, 5)
+        >>> import torchio as tio
+        >>> transform = tio.RandomDownsample(axes=1, downsampling=2.)   # Multiply spacing of second axis by 2
+        >>> transform = tio.RandomDownsample(
+        ...     axes=(0, 1, 2),
+        ...     downsampling=(2, 5),
         ... )   # Multiply spacing of one of the 3 axes by a factor randomly chosen in [2, 5]
-        >>> colin = Colin27
+        >>> colin = tio.datasets.Colin27()
         >>> transformed = transform(colin)  # images have now anisotropic spacing
     """
 
@@ -38,10 +38,9 @@ class RandomDownsample(RandomTransform, SpatialTransform):
             axes: Union[int, Tuple[int, ...]] = (0, 1, 2),
             downsampling: TypeRangeFloat = (1.5, 5),
             p: float = 1,
-            seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
             ):
-        super().__init__(p=p, seed=seed, keys=keys)
+        super().__init__(p=p, keys=keys)
         self.axes = self.parse_axes(axes)
         self.downsampling_range = self.parse_range(
             downsampling, 'downsampling', min_constraint=1)
@@ -64,16 +63,15 @@ class RandomDownsample(RandomTransform, SpatialTransform):
                 raise ValueError('All axes must be 0, 1 or 2')
         return axes_tuple
 
-    def apply_transform(self, sample: Subject) -> Subject:
+    def apply_transform(self, subject: Subject) -> Subject:
         axis, downsampling = self.get_params(self.axes, self.downsampling_range)
         random_parameters_dict = {'axis': axis, 'downsampling': downsampling}
 
-        target_spacing = list(sample.spacing)
+        target_spacing = list(subject.spacing)
         target_spacing[axis] *= downsampling
         transform = Resample(
             tuple(target_spacing),
             image_interpolation='nearest',
         )
-        sample = transform(sample)
-        sample.add_transform(self, random_parameters_dict)
-        return sample
+        subject = transform(subject)
+        return subject

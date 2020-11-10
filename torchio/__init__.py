@@ -2,16 +2,13 @@
 
 __author__ = """Fernando Perez-Garcia"""
 __email__ = 'fernando.perezgarcia.17@ucl.ac.uk'
-<<<<<<< HEAD
-__version__ = '0.17.45'
-=======
-__version__ = '0.17.46'
->>>>>>> 3f98bcf00e4d004418f21f0cdb5282bee77fada3
+__version__ = '0.17.56'
 
 import os
+
 from . import utils
-from .torchio import *
-from .transforms import *
+from .torchio import *  # noqa: F401, F403
+from .transforms import *  # noqa: F401, F403
 from .data import (
     io,
     sampler,
@@ -26,6 +23,24 @@ from .data import (
 )
 from . import datasets
 from . import reference
+
+
+__all__ = [
+    'utils',
+    'io',
+    'sampler',
+    'inference',
+    'ImagesDataset',
+    'SubjectsDataset',
+    'Image',
+    'ScalarImage',
+    'LabelMap',
+    'Queue',
+    'Subject',
+    'datasets',
+    'reference',
+]
+
 
 CITATION = """If you use TorchIO for your research, please cite the following paper:
 Pérez-García et al., TorchIO: a Python library for efficient loading,

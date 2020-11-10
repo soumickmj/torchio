@@ -5,7 +5,6 @@
 import copy
 import h5py
 import torch
-import pytest
 import numpy as np
 from torchio import ScalarImage, LabelMap, Subject, INTENSITY, LABEL, STEM
 from ..utils import TorchioTestCase
@@ -39,16 +38,6 @@ class TestImage(TorchioTestCase):
         sample_input = torch.ones((4, 10, 10, 10))
         RandomAffine()(sample_input)
 
-    def test_crop_attributes(self):
-        cropped = self.sample.crop((1, 1, 1), (5, 5, 5))
-        self.assertIs(self.sample.t1['pre_affine'], cropped.t1['pre_affine'])
-
-    def test_crop_does_not_create_wrong_path(self):
-        data = torch.ones((1, 10, 10, 10))
-        image = ScalarImage(tensor=data)
-        cropped = image.crop((1, 1, 1), (5, 5, 5))
-        self.assertIs(cropped.path, None)
-
     def test_scalar_image_type(self):
         data = torch.ones((1, 10, 10, 10))
         image = ScalarImage(tensor=data)
@@ -69,18 +58,6 @@ class TestImage(TorchioTestCase):
         with self.assertRaises(ValueError):
             LabelMap(tensor=data, type=INTENSITY)
 
-    def test_crop_scalar_image_type(self):
-        data = torch.ones((1, 10, 10, 10))
-        image = ScalarImage(tensor=data)
-        cropped = image.crop((1, 1, 1), (5, 5, 5))
-        self.assertIs(cropped.type, INTENSITY)
-
-    def test_crop_label_map_type(self):
-        data = torch.ones((1, 10, 10, 10))
-        label = LabelMap(tensor=data)
-        cropped = label.crop((1, 1, 1), (5, 5, 5))
-        self.assertIs(cropped.type, LABEL)
-
     def test_no_input(self):
         with self.assertRaises(ValueError):
             ScalarImage()
@@ -90,15 +67,15 @@ class TestImage(TorchioTestCase):
             ScalarImage(path='', data=5)
 
     def test_repr(self):
-        sample = Subject(t1=ScalarImage(self.get_image_path('repr_test')))
-        assert 'shape' not in repr(sample['t1'])
-        sample.load()
-        assert 'shape' in repr(sample['t1'])
+        subject = Subject(t1=ScalarImage(self.get_image_path('repr_test')))
+        assert 'shape' not in repr(subject['t1'])
+        subject.load()
+        assert 'shape' in repr(subject['t1'])
 
     def test_data_tensor(self):
-        sample = copy.deepcopy(self.sample)
-        sample.load()
-        self.assertIs(sample.t1.data, sample.t1.tensor)
+        subject = copy.deepcopy(self.sample_subject)
+        subject.load()
+        self.assertIs(subject.t1.data, subject.t1.tensor)
 
     def test_bad_affine(self):
         with self.assertRaises(ValueError):
@@ -162,62 +139,6 @@ class TestImage(TorchioTestCase):
         self.assertEqual(image.height, image.shape[height_idx])
         self.assertEqual(image.width, image.shape[width_idx])
 
-    def test_h5ds_nolazypatch_crop(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10))
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        image = ScalarImage(h5DS=ds, lazypatch=False)
-        assert image.spatial_shape == (10, 10, 10)
-        cropped_patch = image.crop((1,1,1), (5,5,5))
-        assert cropped_patch.spatial_shape == (4, 4, 4)
-
-    def test_h5ds_lazypatch_crop(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10))
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        image = ScalarImage(h5DS=ds, lazypatch=True)
-        assert image.spatial_shape == (10, 10, 10)
-        cropped_patch = image.crop((1,1,1), (5,5,5))
-        assert cropped_patch.spatial_shape == (4, 4, 4)
-        
-    def test_h5ds_lazypatch_channelless(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10), no_channel_dim=True)
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        image = ScalarImage(h5DS=ds, lazypatch=True)
-        assert image.spatial_shape == (10, 10, 10)
-        cropped_patch = image.crop((1,1,1), (5,5,5))
-        assert cropped_patch.spatial_shape == (4, 4, 4)
-
-    def test_h5ds_nolazypatch_channelless(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10), no_channel_dim=True)
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        image = ScalarImage(h5DS=ds, lazypatch=False)
-        assert image.spatial_shape == (10, 10, 10)
-        cropped_patch = image.crop((1,1,1), (5,5,5))
-        assert cropped_patch.spatial_shape == (4, 4, 4)
-
-    def test_h5ds_nolazypatch_nan(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10), add_nans=True)
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        with self.assertWarns(UserWarning):
-            image = ScalarImage(h5DS=ds, lazypatch=False, check_nans=True)
-        image.set_check_nans(False)
-
-    def test_h5ds_lazypatch_crop_nan(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10), add_nans=True)
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        image = ScalarImage(h5DS=ds, lazypatch=True, check_nans=True)
-        with self.assertWarns(UserWarning):
-            cropped_patch = image.crop((1,1,1), (5,5,5))
-        image.set_check_nans(False)
-
-    def test_label_map_type_h5ds(self):
-        path = self.get_h5DS_path('h5ds3D', shape=(10, 10, 10), binary=True)
-        f = h5py.File(path, "r", swmr=True)
-        ds = f["data"]
-        label = LabelMap(h5DS=ds)
-        self.assertIs(label.type, LABEL)
+    def test_plot(self):
+        image = self.sample_subject.t1
+        image.plot(show=False, output_path=self.dir / 'image.png')

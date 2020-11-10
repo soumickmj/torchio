@@ -4,10 +4,10 @@
 
 from setuptools import setup, find_packages
 
-with open('README.md') as readme_file:
+with open('README.md', encoding='utf8') as readme_file:
     readme = readme_file.read()
 
-with open('HISTORY.rst') as history_file:
+with open('HISTORY.rst', encoding='utf8') as history_file:
     history = history_file.read()
 
 requirements = [
@@ -47,6 +47,9 @@ setup(
             'torchio-transform=torchio.cli:apply_transform',
         ],
     },
+    extras_require={
+        'plot': ['matplotlib', 'seaborn'],
+    },
     install_requires=requirements,
     license='MIT license',
     long_description=readme + '\n\n' + history,
@@ -59,10 +62,6 @@ setup(
     test_suite='tests',
     tests_require=[],
     url='https://github.com/fepegar/torchio',
-<<<<<<< HEAD
-    version='0.17.45',
-=======
-    version='0.17.46',
->>>>>>> 3f98bcf00e4d004418f21f0cdb5282bee77fada3
+    version='0.17.56',
     zip_safe=False,
 )

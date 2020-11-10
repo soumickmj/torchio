@@ -28,10 +28,9 @@ class RandomSwap(RandomTransform, IntensityTransform):
             patch_size: TypeTuple = 15,
             num_iterations: int = 100,
             p: float = 1,
-            seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
             ):
-        super().__init__(p=p, seed=seed, keys=keys)
+        super().__init__(p=p, keys=keys)
         self.patch_size = np.array(to_tuple(patch_size))
         self.num_iterations = self.parse_num_iterations(num_iterations)
 
@@ -72,13 +71,13 @@ class RandomSwap(RandomTransform, IntensityTransform):
             locations.append((first_ini, second_ini))
         return locations
 
-    def apply_transform(self, sample: Subject) -> dict:
-        for image in self.get_images(sample):
+    def apply_transform(self, subject: Subject) -> Subject:
+        for image in self.get_images(subject):
             tensor = image[DATA]
             locations = self.get_params(
                 tensor, self.patch_size, self.num_iterations)
             image[DATA] = swap(tensor, self.patch_size, locations)
-        return sample
+        return subject
 
 
 def swap(

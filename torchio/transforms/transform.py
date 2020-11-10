@@ -12,9 +12,18 @@ import SimpleITK as sitk
 from .. import TypeData, DATA, AFFINE, TypeNumber
 from ..data.subject import Subject
 from ..data.image import Image, ScalarImage
-from ..data.dataset import SubjectsDataset
-from ..utils import nib_to_sitk, sitk_to_nib
+from ..utils import nib_to_sitk, sitk_to_nib, is_jsonable, to_tuple
 from .interpolation import Interpolation
+
+
+TypeTransformInput = Union[
+    Subject,
+    Image,
+    torch.Tensor,
+    np.ndarray,
+    sitk.Image,
+    dict,
+]
 
 
 class Transform(ABC):
@@ -48,9 +57,13 @@ class Transform(ABC):
         self.copy = copy
         self.keys = keys
         self.default_image_name = 'default_image_name'
+        self.transform_params = {}
 
-    def __call__(self, data: Union[Subject, torch.Tensor, np.ndarray]):
-        """Transform a sample and return the result.
+    def __call__(
+            self,
+            data: TypeTransformInput,
+            ) -> TypeTransformInput:
+        """Transform data and return a result of the same type.
 
         Args:
             data: Instance of :py:class:`~torchio.Subject`, 4D
@@ -60,6 +73,9 @@ class Transform(ABC):
                 a tensor, the affine matrix is an identity and a tensor will be
                 also returned.
         """
+        self.transform_params = {}
+        self._store_params()
+
         if torch.rand(1).item() > self.probability:
             return data
 
@@ -68,19 +84,19 @@ class Transform(ABC):
         if isinstance(data, nib.Nifti1Image):
             tensor = data.get_fdata(dtype=np.float32)
             data = ScalarImage(tensor=tensor, affine=data.affine)
-            sample = self._get_subject_from_image(data)
+            subject = self._get_subject_from_image(data)
             is_nib = True
         elif isinstance(data, (np.ndarray, torch.Tensor)):
-            sample = self.parse_tensor(data)
+            subject = self.parse_tensor(data)
             is_array = isinstance(data, np.ndarray)
             is_tensor = True
         elif isinstance(data, Image):
-            sample = self._get_subject_from_image(data)
+            subject = self._get_subject_from_image(data)
             is_image = True
         elif isinstance(data, Subject):
-            sample = data
+            subject = data
         elif isinstance(data, sitk.Image):
-            sample = self._get_subject_from_sitk_image(data)
+            subject = self._get_subject_from_sitk_image(data)
             is_sitk = True
         elif isinstance(data, dict):  # e.g. Eisen or MONAI dicts
             if self.keys is None:
@@ -89,15 +105,17 @@ class Transform(ABC):
                     ' specified when instantiating the transform'
                 )
                 raise RuntimeError(message)
-            sample = self._get_subject_from_dict(data, self.keys)
+            subject = self._get_subject_from_dict(data, self.keys)
             is_dict = True
-        self.parse_sample(sample)
+        else:
+            raise ValueError(f'Input type not recognized: {type(data)}')
+        self.parse_subject(subject)
 
         if self.copy:
-            sample = copy.copy(sample)
+            subject = copy.copy(subject)
 
         with np.errstate(all='raise'):
-            transformed = self.apply_transform(sample)
+            transformed = self.apply_transform(subject)
 
         for image in transformed.get_images(intensity_only=False):
             ndim = image[DATA].ndim
@@ -127,11 +145,51 @@ class Transform(ABC):
                 )
                 raise RuntimeError(message)
             transformed = nib.Nifti1Image(data[0].numpy(), image[AFFINE])
+
+        # If not a Compose
+        if isinstance(transformed, Subject) and not (self.name in ['Compose', 'OneOf']):
+            transformed.add_transform(
+                self,
+                parameters_dict=self.transform_params,
+            )
+
         return transformed
 
+    def _store_params(self):
+        self.transform_params.update(self.__dict__.copy())
+        del self.transform_params['transform_params']
+        for key, value in self.transform_params.items():
+            if not is_jsonable(value):
+                self.transform_params[key] = value.__str__()
+
     @abstractmethod
-    def apply_transform(self, sample: Subject):
+    def apply_transform(self, subject: Subject):
         raise NotImplementedError
+
+    @staticmethod
+    def to_range(n, around):
+        if around is None:
+            return 0, n
+        else:
+            return around - n, around + n
+
+    def parse_params(self, params, around, name, **kwargs):
+        params = to_tuple(params)
+        if len(params) == 1 or len(params) == 2:  # d or (a, b)
+            params *= 3  # (d, d, d) or (a, b, a, b, a, b)
+        if len(params) == 3:  # (a, b, c)
+            items = [self.to_range(n, around) for n in params]
+            # (-a, a, -b, b, -c, c) or (1-a, 1+a, 1-b, 1+b, 1-c, 1+c)
+            params = [n for prange in items for n in prange]
+        if len(params) != 6:
+            message = (
+                f'If "{name}" is a sequence, it must have length 2, 3 or 6,'
+                f' not {len(params)}'
+            )
+            raise ValueError(message)
+        for param_range in zip(params[::2], params[1::2]):
+            self.parse_range(param_range, name, **kwargs)
+        return tuple(params)
 
     @staticmethod
     def parse_range(
@@ -172,7 +230,7 @@ class Transform(ABC):
                 :math:`n_{max}` and :math:`n_{max}` are not of type
                 :attr:`type_constraint`.
         """
-        if isinstance(nums_range, numbers.Number):
+        if isinstance(nums_range, numbers.Number):  # single number given
             if nums_range < 0:
                 raise ValueError(
                     f'If {name} is a single number,'
@@ -197,40 +255,40 @@ class Transform(ABC):
             return (min_range, nums_range)
 
         try:
-            min_degree, max_degree = nums_range
+            min_value, max_value = nums_range
         except (TypeError, ValueError):
             raise ValueError(
                 f'If {name} is not a single number, it must be'
                 f' a sequence of len 2, not {nums_range}'
             )
 
-        min_is_number = isinstance(min_degree, numbers.Number)
-        max_is_number = isinstance(max_degree, numbers.Number)
+        min_is_number = isinstance(min_value, numbers.Number)
+        max_is_number = isinstance(max_value, numbers.Number)
         if not min_is_number or not max_is_number:
             message = (
                 f'{name} values must be numbers, not {nums_range}')
             raise ValueError(message)
 
-        if min_degree > max_degree:
+        if min_value > max_value:
             raise ValueError(
                 f'If {name} is a sequence, the second value must be'
                 f' equal or greater than the first, but it is {nums_range}')
 
-        if min_constraint is not None and min_degree < min_constraint:
+        if min_constraint is not None and min_value < min_constraint:
             raise ValueError(
                 f'If {name} is a sequence, the first value must be greater'
-                f' than {min_constraint}, but it is {min_degree}'
+                f' than {min_constraint}, but it is {min_value}'
             )
 
-        if max_constraint is not None and max_degree > max_constraint:
+        if max_constraint is not None and max_value > max_constraint:
             raise ValueError(
                 f'If {name} is a sequence, the second value must be smaller'
-                f' than {max_constraint}, but it is {max_degree}'
+                f' than {max_constraint}, but it is {max_value}'
             )
 
         if type_constraint is not None:
-            min_type_ok = isinstance(min_degree, type_constraint)
-            max_type_ok = isinstance(max_degree, type_constraint)
+            min_type_ok = isinstance(min_value, type_constraint)
+            max_type_ok = isinstance(max_value, type_constraint)
             if not min_type_ok or not max_type_ok:
                 raise ValueError(
                     f'If "{name}" is a sequence, its values must be of'
@@ -250,11 +308,11 @@ class Transform(ABC):
         return probability
 
     @staticmethod
-    def parse_sample(sample: Subject) -> None:
-        if not isinstance(sample, Subject):
+    def parse_subject(subject: Subject) -> None:
+        if not isinstance(subject, Subject):
             message = (
                 'Input to a transform must be a tensor or an instance'
-                f' of torchio.Subject, not "{type(sample)}"'
+                f' of torchio.Subject, not "{type(subject)}"'
             )
             raise RuntimeError(message)
 

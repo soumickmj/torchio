@@ -1,5 +1,6 @@
 import ast
 import gzip
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -124,7 +125,7 @@ def apply_transform_to_file(
         type: str = INTENSITY,  # noqa: A002
         verbose: bool = False,
         ):
-    from . import Image, SubjectsDataset, Subject
+    from . import Image, Subject
     subject = Subject(image=Image(input_path, type=type))
     transformed = transform(subject)
     transformed.image.save(output_path)
@@ -282,7 +283,7 @@ def get_torchio_cache_dir():
     return Path('~/.cache/torchio').expanduser()
 
 
-def round_up(value: float) -> float:
+def round_up(value: float) -> int:
     """Round half towards infinity.
 
     Args:
@@ -300,7 +301,7 @@ def round_up(value: float) -> float:
         4
 
     """
-    return np.floor(value + 0.5)
+    return int(np.floor(value + 0.5))
 
 
 def compress(input_path, output_path):
@@ -317,8 +318,32 @@ def check_sequence(sequence: Sequence, name: str):
         raise TypeError(message)
 
 
+def gen_seed():
+    """Random seed generator to avoid overflow
+
+    Returns
+        A random seed as an int
+    """
+    return torch.randint(0, 2**31, (1,)).item()
+
+
+def is_jsonable(x):
+    """Tests whether an object is convertible to json
+
+    Args:
+        x: object to test
+
+    Returns:
+        Boolean stating whether the object x is convertible to json
+    """
+    try:
+        json.dumps(x)
+        return True
+    except (TypeError, OverflowError):
+        return False
+
+
 def get_major_sitk_version() -> int:
-    import SimpleITK as sitk
     # This attribute was added in version 2
     # https://github.com/SimpleITK/SimpleITK/pull/1171
     version = getattr(sitk, '__version__', None)
