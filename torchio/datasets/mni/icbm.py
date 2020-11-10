@@ -21,11 +21,11 @@ class ICBM2009CNonlinearSymmetric(SubjectMNI):
             independent images.
 
     Example:
-        >>> import torchio
-        >>> icbm = torchio.datasets.ICBM2009CNonlinearSymmetric()
+        >>> import torchio as tio
+        >>> icbm = tio.datasets.ICBM2009CNonlinearSymmetric()
         >>> icbm
         ICBM2009CNonlinearSymmetric(Keys: ('t1', 'eyes', 'face', 'brain', 't2', 'pd', 'tissues'); images: 7)
-        >>> icbm = torchio.datasets.ICBM2009CNonlinearSymmetric(load_4d_tissues=False)
+        >>> icbm = tio.datasets.ICBM2009CNonlinearSymmetric(load_4d_tissues=False)
         >>> icbm
         ICBM2009CNonlinearSymmetric(Keys: ('t1', 'eyes', 'face', 'brain', 't2', 'pd', 'gm', 'wm', 'csf'); images: 9)
 
@@ -73,7 +73,7 @@ class ICBM2009CNonlinearSymmetric(SubjectMNI):
             pd=ScalarImage(f'{p}_csf_{m}{s}'),
         )
         if load_4d_tissues:
-            subject_dict['tissues'] = LabelMap(tissues_path)
+            subject_dict['tissues'] = LabelMap(tissues_path, channels_last=True)
         else:
             subject_dict['gm'] = LabelMap(f'{p}_gm_{m}{s}')
             subject_dict['wm'] = LabelMap(f'{p}_wm_{m}{s}')

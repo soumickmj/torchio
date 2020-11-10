@@ -1,4 +1,3 @@
-import torch
 from torch.utils.data import DataLoader
 from torchio import LOCATION, DATA
 from torchio.data.inference import GridSampler, GridAggregator
@@ -20,7 +19,7 @@ class TestInference(TorchioTestCase):
             batch_size = 6
 
             grid_sampler = GridSampler(
-                self.sample,
+                self.sample_subject,
                 patch_size,
                 patch_overlap,
                 padding_mode=padding_mode,
@@ -36,7 +35,7 @@ class TestInference(TorchioTestCase):
 
             output = aggregator.get_output_tensor()
             assert (output == -5).all()
-            assert output.shape == self.sample.t1.shape
+            assert output.shape == self.sample_subject.t1.shape
 
 
 def model(tensor):

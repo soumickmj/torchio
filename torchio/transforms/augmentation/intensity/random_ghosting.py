@@ -54,10 +54,9 @@ class RandomGhosting(RandomTransform, IntensityTransform):
             intensity: Union[float, Tuple[float, float]] = (0.5, 1),
             restore: float = 0.02,
             p: float = 1,
-            seed: Optional[int] = None,
             keys: Optional[List[str]] = None,
             ):
-        super().__init__(p=p, seed=seed, keys=keys)
+        super().__init__(p=p, keys=keys)
         if not isinstance(axes, tuple):
             try:
                 axes = tuple(axes)
@@ -83,11 +82,11 @@ class RandomGhosting(RandomTransform, IntensityTransform):
             raise ValueError(message)
         return restore
 
-    def apply_transform(self, sample: Subject) -> dict:
+    def apply_transform(self, subject: Subject) -> Subject:
         random_parameters_images_dict = {}
         if any(isinstance(n, str) for n in self.axes):
-            sample.check_consistent_orientation()
-        for image_name, image in self.get_images_dict(sample).items():
+            subject.check_consistent_orientation()
+        for image_name, image in self.get_images_dict(subject).items():
             transformed_tensors = []
             is_2d = image.is_2d()
             axes = [a for a in self.axes if a != 2] if is_2d else self.axes
@@ -114,8 +113,7 @@ class RandomGhosting(RandomTransform, IntensityTransform):
                 )
                 transformed_tensors.append(transformed_tensor)
             image[DATA] = torch.stack(transformed_tensors)
-        sample.add_transform(self, random_parameters_images_dict)
-        return sample
+        return subject
 
     @staticmethod
     def get_params(
